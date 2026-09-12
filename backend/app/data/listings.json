@@ -1,0 +1,67 @@
+[
+  {
+    "id": 1,
+    "title": "안암동 원룸",
+    "room_type": "원룸",
+    "address": "서울특별시 성북구 안암동5가",
+    "latitude": 37.5863,
+    "longitude": 127.0298,
+    "deposit": 1000,
+    "monthly_rent": 55,
+    "maintenance_fee": 7,
+    "area": 21.3,
+    "floor": 3
+  },
+  {
+    "id": 2,
+    "title": "보문동 오피스텔",
+    "room_type": "오피스텔",
+    "address": "서울특별시 성북구 보문동",
+    "latitude": 37.5854,
+    "longitude": 127.0197,
+    "deposit": 2000,
+    "monthly_rent": 60,
+    "maintenance_fee": 10,
+    "area": 25.1,
+    "floor": 7
+  },
+  {
+    "id": 3,
+    "title": "신설동 원룸",
+    "room_type": "원룸",
+    "address": "서울특별시 동대문구 신설동",
+    "latitude": 37.5761,
+    "longitude": 127.0244,
+    "deposit": 500,
+    "monthly_rent": 48,
+    "maintenance_fee": 5,
+    "area": 18.9,
+    "floor": 2
+  },
+  {
+    "id": 4,
+    "title": "성신여대입구 오피스텔",
+    "room_type": "오피스텔",
+    "address": "서울특별시 성북구 동선동",
+    "latitude": 37.5926,
+    "longitude": 127.0165,
+    "deposit": 1000,
+    "monthly_rent": 65,
+    "maintenance_fee": 9,
+    "area": 27.4,
+    "floor": 9
+  },
+  {
+    "id": 5,
+    "title": "수유역 원룸",
+    "room_type": "원룸",
+    "address": "서울특별시 강북구 수유동",
+    "latitude": 37.6381,
+    "longitude": 127.0257,
+    "deposit": 500,
+    "monthly_rent": 42,
+    "maintenance_fee": 6,
+    "area": 20.1,
+    "floor": 4
+  }
+]
