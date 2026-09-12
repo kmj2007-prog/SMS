@@ -1,6 +1,9 @@
+from functools import lru_cache
+
 from app.services.kakao_service import get_public_transit_route
 
 
+@lru_cache(maxsize=256)
 def calculate_commute(
     start_latitude: float,
     start_longitude: float,
