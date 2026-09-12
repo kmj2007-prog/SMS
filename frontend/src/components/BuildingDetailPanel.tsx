@@ -9,12 +9,24 @@ import {
   formatMonthlyRent,
 } from '../utils/format'
 import { BuildingPhoto } from './BuildingPhoto'
+import { NearbyInfrastructureList } from './NearbyInfrastructureList'
 import { TransitRouteTimeline } from './TransitRouteTimeline'
 
 export function BuildingDetailPanel({ building }: { building: Listing }) {
-  const { isSaved, toggleSaved, selectBuilding, cancelHoverClose, delayClearHover } =
-    useAppState()
+  const {
+    isSaved,
+    toggleSaved,
+    selectBuilding,
+    cancelHoverClose,
+    delayClearHover,
+    selectedBuildingId,
+    searchDraft,
+    infraLoading,
+    infraError,
+    nearbyByKind,
+  } = useAppState()
   const saved = isSaved(building.id)
+  const isSelected = selectedBuildingId === building.id
 
   return (
     <aside
@@ -88,6 +100,15 @@ export function BuildingDetailPanel({ building }: { building: Listing }) {
           <dd>{formatMinutes(building.commute_min)}</dd>
         </div>
       </dl>
+
+      {isSelected && (
+        <NearbyInfrastructureList
+          kinds={searchDraft.infrastructure_priority}
+          nearbyByKind={nearbyByKind}
+          loading={infraLoading}
+          error={infraError}
+        />
+      )}
 
       <TransitRouteTimeline building={building} />
     </aside>

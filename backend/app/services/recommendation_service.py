@@ -93,6 +93,7 @@ def recommend_listings(
                 route_type=commute["route_type"],
                 total_distance=commute["total_distance"],
                 fare=commute["fare"],
+                route_steps=commute.get("steps") or [],
             )
         )
 

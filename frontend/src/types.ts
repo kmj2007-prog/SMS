@@ -7,6 +7,7 @@ export type RouteSegmentKind =
   | 'bus'
   | 'transfer'
   | 'destination'
+export type InfrastructureKind = 'gym' | 'park' | 'cinema' | 'library'
 
 export interface GeoPoint {
   latitude: number
@@ -19,13 +20,10 @@ export interface RouteSegment {
   duration_min?: number
   line_name?: string
   detail?: string
+  start_stop?: string
+  points?: GeoPoint[]
 }
 
-/**
- * Backend `Listing` 필드(id, title, room_type, address, latitude, longitude,
- * deposit, monthly_rent, maintenance_fee, area, floor)를 그대로 사용하고,
- * 지도·경로 UI에 필요한 필드를 확장한다.
- */
 export interface Listing {
   id: number
   title: string
@@ -35,15 +33,15 @@ export interface Listing {
   longitude: number
   deposit: number
   monthly_rent: number
-  maintenance_fee: number
+  maintenance_fee: number | null
   area: number
-  floor: number
+  floor: number | null
   neighborhood: string
   image_url: string
   building_type: string
-  built_year: number
+  built_year: number | null
   nearest_station: string
-  walk_to_station_min: number
+  walk_to_station_min: number | null
   destination: string
   commute_min: number
   transfer_count: number
@@ -51,6 +49,42 @@ export interface Listing {
   transport_modes: TransportMode[]
   route_path: GeoPoint[]
   route_segments: RouteSegment[]
+  route_type?: string
+  total_distance?: number
+}
+
+export interface Infrastructure {
+  id: string
+  title: string
+  kind: InfrastructureKind
+  address: string
+  latitude: number
+  longitude: number
+  hours?: string
+  description?: string
+  phone?: string | null
+  place_url?: string | null
+}
+
+export interface InfrastructureMatch {
+  kind: InfrastructureKind
+  rank: number
+  facility: Infrastructure
+  distance_m: number
+  walk_min: number
+}
+
+export interface ScoredListing {
+  listing: Listing
+  score: number
+  rank: number
+  nearest: InfrastructureMatch[]
+  badges: string[]
+}
+
+export interface VisibleInfraLink {
+  fromBuilding: Listing
+  match: InfrastructureMatch
 }
 
 export interface SearchConditions {
@@ -59,6 +93,7 @@ export interface SearchConditions {
   transport_modes: TransportMode[]
   max_monthly_rent: number
   room_types: RoomType[]
+  infrastructure_priority: InfrastructureKind[]
 }
 
 export interface RecentSearch {
@@ -68,6 +103,7 @@ export interface RecentSearch {
   max_monthly_rent: number
   transport_modes: TransportMode[]
   room_types: RoomType[]
+  infrastructure_priority: InfrastructureKind[]
   searched_at: string
 }
 

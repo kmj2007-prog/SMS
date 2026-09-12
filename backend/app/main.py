@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.routers.infrastructure import router as infrastructure_router
 from app.routers.commute import router as commute_router
 from app.routers.listings import router as listings_router
 from app.routers.places import router as places_router
@@ -25,6 +26,7 @@ app.include_router(listings_router)
 app.include_router(places_router)
 app.include_router(commute_router)
 app.include_router(recommendations_router)
+app.include_router(infrastructure_router)
 
 
 @app.get("/")

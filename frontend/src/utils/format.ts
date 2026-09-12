@@ -1,6 +1,7 @@
 import type { RoomType, TransportMode } from '../types'
 
-export function formatManwon(value: number): string {
+export function formatManwon(value: number | null | undefined): string {
+  if (value == null) return '-'
   return `${value.toLocaleString('ko-KR')}만원`
 }
 
@@ -12,11 +13,13 @@ export function formatDeposit(value: number): string {
   return `보증금 ${value.toLocaleString('ko-KR')}만원`
 }
 
-export function formatMaintenance(value: number): string {
+export function formatMaintenance(value: number | null | undefined): string {
+  if (value == null) return '관리비 정보 없음'
   return `관리비 ${formatManwon(value)}`
 }
 
-export function formatMinutes(min: number): string {
+export function formatMinutes(min: number | null | undefined): string {
+  if (min == null) return '-'
   return `${min}분`
 }
 

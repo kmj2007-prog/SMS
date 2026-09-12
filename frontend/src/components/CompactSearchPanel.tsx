@@ -1,9 +1,11 @@
 import { useAppState } from '../context/AppStateContext'
 import { formatManwon, formatRoomTypes, formatTransport } from '../utils/format'
+import { formatInfraSummary } from '../utils/infrastructure'
 
 export function CompactSearchPanel() {
-  const { searchConditions, runSearch, setSavedPanelOpen } = useAppState()
+  const { searchConditions, searchDraft, runSearch, setSavedPanelOpen } = useAppState()
   const transports = searchConditions.transport_modes.map(formatTransport).join(', ')
+  const infraSummary = formatInfraSummary(searchDraft.infrastructure_priority)
 
   return (
     <section className="panel compactSearchPanel" aria-label="검색 조건 요약">
@@ -15,6 +17,7 @@ export function CompactSearchPanel() {
         {formatRoomTypes(searchConditions.room_types)}
       </p>
       <p className="compactLine muted">{transports}</p>
+      {infraSummary ? <p className="compactLine muted">{infraSummary}</p> : null}
       <div className="compactActions">
         <button
           className="ghostBtn"
@@ -22,7 +25,10 @@ export function CompactSearchPanel() {
         >
           조건 수정
         </button>
-        <button className="primaryBtn sm" onClick={() => runSearch(searchConditions)}>
+        <button className="primaryBtn sm" onClick={() => runSearch({
+          ...searchConditions,
+          infrastructure_priority: searchDraft.infrastructure_priority,
+        })}>
           검색
         </button>
       </div>

@@ -6,6 +6,7 @@ export const DEFAULT_SEARCH: SearchConditions = {
   transport_modes: ['subway', 'bus'],
   max_monthly_rent: 60,
   room_types: ['원룸'],
+  infrastructure_priority: [],
 }
 
 function normalize(text: string): string {

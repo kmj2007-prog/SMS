@@ -26,4 +26,5 @@ def calculate_commute(
         "route_type": route["route_type"],
         "total_distance": route["total_distance"],
         "fare": route["fare"],
+        "steps": route.get("steps") or [],
     }

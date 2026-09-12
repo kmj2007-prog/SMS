@@ -2,6 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.commute import RouteStep
 from app.schemas.listing import Listing
 
 
@@ -31,6 +32,7 @@ class ListingWithCommute(Listing):
     route_type: str
     total_distance: int
     fare: int | None = None
+    route_steps: list[RouteStep] = Field(default_factory=list)
 
 
 class RecommendationResponse(BaseModel):
