@@ -8,13 +8,28 @@ import {
   formatMinutes,
   formatMonthlyRent,
 } from '../utils/format'
+import { matchesForBuilding } from '../utils/infrastructure'
 import { BuildingPhoto } from './BuildingPhoto'
+import { NearbyInfrastructureList } from './NearbyInfrastructureList'
 import { TransitRouteTimeline } from './TransitRouteTimeline'
 
 export function BuildingDetailPanel({ building }: { building: Listing }) {
-  const { isSaved, toggleSaved, selectBuilding, cancelHoverClose, delayClearHover } =
-    useAppState()
+  const {
+    isSaved,
+    toggleSaved,
+    selectBuilding,
+    cancelHoverClose,
+    delayClearHover,
+    searchConditions,
+    scoreFor,
+    focusInfrastructure,
+  } = useAppState()
   const saved = isSaved(building.id)
+  const scored = scoreFor(building.id)
+  const priority = searchConditions.infrastructure_priority
+  const matches =
+    scored?.nearest ??
+    (priority.length > 0 ? matchesForBuilding(building, priority) : [])
 
   return (
     <aside
@@ -88,6 +103,12 @@ export function BuildingDetailPanel({ building }: { building: Listing }) {
           <dd>{formatMinutes(building.commute_min)}</dd>
         </div>
       </dl>
+
+      <NearbyInfrastructureList
+        matches={matches}
+        score={scored?.score ?? 0}
+        onFocus={focusInfrastructure}
+      />
 
       <TransitRouteTimeline building={building} />
     </aside>

@@ -7,6 +7,7 @@ export function BuildingMarker({
   selected,
   hovered,
   saved,
+  rank,
   scale,
   onHover,
   onLeave,
@@ -16,6 +17,7 @@ export function BuildingMarker({
   selected: boolean
   hovered: boolean
   saved: boolean
+  rank?: number
   scale: number
   onHover: () => void
   onLeave: () => void
@@ -46,6 +48,11 @@ export function BuildingMarker({
     >
       {selected && <span className="markerPulse" aria-hidden="true" />}
       <span className="markerPin" aria-hidden="true" />
+      {rank != null && rank <= 3 && (
+        <span className="markerRank" aria-hidden="true">
+          {rank}
+        </span>
+      )}
       {saved && (
         <span className="markerSaved" aria-hidden="true">
           ♥

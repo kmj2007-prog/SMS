@@ -53,12 +53,47 @@ export interface Listing {
   route_segments: RouteSegment[]
 }
 
+export type InfrastructureKind = 'gym' | 'park' | 'cinema' | 'library'
+
+export interface Infrastructure {
+  id: number
+  title: string
+  kind: InfrastructureKind
+  address: string
+  latitude: number
+  longitude: number
+  hours: string
+  description?: string
+}
+
+export interface InfrastructureMatch {
+  kind: InfrastructureKind
+  rank: number
+  facility: Infrastructure
+  distance_m: number
+  walk_min: number
+}
+
+export interface ScoredListing {
+  listing: Listing
+  score: number
+  rank: number
+  nearest: InfrastructureMatch[]
+  badges: string[]
+}
+
+export interface VisibleInfraLink {
+  fromBuilding: Listing
+  match: InfrastructureMatch
+}
+
 export interface SearchConditions {
   destination: string
   max_commute_min: number
   transport_modes: TransportMode[]
   max_monthly_rent: number
   room_types: RoomType[]
+  infrastructure_priority: InfrastructureKind[]
 }
 
 export interface RecentSearch {
@@ -68,6 +103,7 @@ export interface RecentSearch {
   max_monthly_rent: number
   transport_modes: TransportMode[]
   room_types: RoomType[]
+  infrastructure_priority: InfrastructureKind[]
   searched_at: string
 }
 

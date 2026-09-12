@@ -8,16 +8,16 @@ import { SavedBuildingToggle } from '../components/SavedBuildingToggle'
 import { SearchPanel } from '../components/SearchPanel'
 
 export function MapPage() {
-  const { displayedBuilding, isSavedPanelOpen, selectBuilding, selectedBuildingId } =
+  const { displayedBuilding, isSavedPanelOpen, selectedBuildingId, clearMapSelection } =
     useAppState()
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') selectBuilding(null)
+      if (e.key === 'Escape') clearMapSelection()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectBuilding])
+  }, [clearMapSelection])
 
   return (
     <main className={`mapPage ${displayedBuilding ? 'hasDetail' : ''}`}>
