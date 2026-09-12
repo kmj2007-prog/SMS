@@ -49,9 +49,16 @@ export function formatDateTime(iso: string): string {
   return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-export function formatBuildingAge(builtYear: number, now = 2026): string {
+export function formatBuildingAge(
+  builtYear: number | null | undefined,
+  now = 2026,
+): string {
+  if (builtYear == null) return '준공 정보 없음'
+
   const age = now - builtYear
+
   if (age <= 0) return `${builtYear}년 준공`
+
   return `${builtYear}년 준공 · ${age}년차`
 }
 

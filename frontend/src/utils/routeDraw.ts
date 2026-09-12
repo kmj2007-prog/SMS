@@ -1,4 +1,4 @@
-import type { GeoPoint, Listing, RouteSegment, RouteSegmentKind } from '../types'
+import type { GeoPoint, Listing, RouteSegmentKind } from '../types'
 import { haversineMeters } from './infrastructure'
 
 const CONNECTOR_GAP_M = 30
