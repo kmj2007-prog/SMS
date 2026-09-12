@@ -1,285 +1,329 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { MAP_BOUNDS, polylinePoints, project } from '../data/geo'
-import {
-  NEIGHBORHOODS,
-  PARKS,
-  ROADS,
-  STATIONS,
-  SUBWAY_LINES,
-  findDestination,
-} from '../data/mapPlaces'
+import { useEffect, useRef, useState } from 'react'
+import { findDestination } from '../data/mapPlaces'
+import { INFRASTRUCTURE } from '../data/infrastructure'
 import { useAppState } from '../context/AppStateContext'
 import type { GeoPoint, Listing } from '../types'
-import { BuildingMarker } from './BuildingMarker'
-import { MarkerTooltip } from './MarkerTooltip'
+import {
+  buildingMarkerImage,
+  destMarkerImage,
+  getKakaoMaps,
+  infraMarkerImage,
+  KAKAO_APP_KEY,
+  loadKakaoMaps,
+  resetKakaoLoader,
+} from '../lib/kakaoMaps'
+import { formatManwon } from '../utils/format'
 
-function destForName(name: string): GeoPoint {
-  return findDestination(name)
+const INITIAL_CENTER = { latitude: 37.5894, longitude: 127.0325 }
+const INITIAL_LEVEL = 5
+
+type BuildingMarkerItem = {
+  marker: KakaoMarker
+  info: KakaoInfoWindow
+  onClick: () => void
+  onOver: () => void
+  onOut: () => void
 }
 
-function cityBlocks() {
-  const rects: Array<{ x: number; y: number; w: number; h: number }> = []
-  for (let col = 0; col < 18; col += 1) {
-    for (let row = 0; row < 24; row += 1) {
-      const jitter = ((col * 13 + row * 7) % 9) - 4
-      rects.push({
-        x: 28 + col * 92 + jitter,
-        y: 24 + row * 88 + (jitter % 5),
-        w: 70,
-        h: 64,
-      })
+function latLng(point: GeoPoint) {
+  const maps = getKakaoMaps()
+  return new maps.LatLng(point.latitude, point.longitude)
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function tooltipHtml(building: Listing) {
+  return `<div class="kakaoBuildingTip">
+    <strong>${escapeHtml(building.title)}</strong>
+    <span>${escapeHtml(building.room_type)} · 월세 ${escapeHtml(formatManwon(building.monthly_rent))}</span>
+    <span>${escapeHtml(building.destination)} ${building.commute_min}분</span>
+  </div>`
+}
+
+function clearBuildingMarkers(items: BuildingMarkerItem[]) {
+  const maps = window.kakao?.maps
+  for (const item of items) {
+    item.info.close()
+    if (maps) {
+      maps.event.removeListener(item.marker, 'click', item.onClick)
+      maps.event.removeListener(item.marker, 'mouseover', item.onOver)
+      maps.event.removeListener(item.marker, 'mouseout', item.onOut)
     }
+    item.marker.setMap(null)
   }
-  return rects
 }
-
-const BLOCKS = cityBlocks()
 
 export function MapView() {
   const {
-    visibleBuildings,
-    displayedBuilding,
     selectedBuilding,
     selectedBuildingId,
-    hoveredBuildingId,
     searchConditions,
     hasSearched,
     searchResults,
     setHoveredBuildingId,
     delayClearHover,
     selectBuilding,
-    isSaved,
     mapFocusNonce,
+    visibleInfrastructure,
+    focusInfrastructureId,
   } = useAppState()
 
-  const viewportRef = useRef<HTMLDivElement>(null)
-  const [scale, setScale] = useState(0.72)
-  const [pan, setPan] = useState({ x: -220, y: -620 })
-  const scaleRef = useRef(0.72)
-  useEffect(() => {
-    scaleRef.current = scale
-  }, [scale])
-  const drag = useRef<{
-    active: boolean
-    moved: boolean
-    sx: number
-    sy: number
-    px: number
-    py: number
-  }>({ active: false, moved: false, sx: 0, sy: 0, px: 0, py: 0 })
+  const containerRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<KakaoMap | null>(null)
+  const destMarkerRef = useRef<KakaoMarker | null>(null)
+  const destLabelRef = useRef<KakaoCustomOverlay | null>(null)
+  const buildingMarkersRef = useRef<BuildingMarkerItem[]>([])
+  const infraMarkersRef = useRef<KakaoMarker[]>([])
+  const polylineRef = useRef<KakaoPolyline | null>(null)
 
-  const panTo = useCallback((point: GeoPoint, selected: boolean) => {
-    const el = viewportRef.current
+  const [status, setStatus] = useState<'no-key' | 'loading' | 'ready' | 'error'>(
+    KAKAO_APP_KEY ? 'loading' : 'no-key',
+  )
+  const [retryCount, setRetryCount] = useState(0)
+
+  useEffect(() => {
+    if (!KAKAO_APP_KEY) return
+    const el = containerRef.current
     if (!el) return
-    const k = scaleRef.current
-    const { x, y } = project(point)
-    const biasX = selected ? -36 : 80
-    setPan({
-      x: el.clientWidth / 2 + biasX - x * k,
-      y: el.clientHeight / 2 - y * k,
+    let cancelled = false
+
+    loadKakaoMaps()
+      .then((maps) => {
+        if (cancelled) return
+        const map = new maps.Map(el, {
+          center: new maps.LatLng(INITIAL_CENTER.latitude, INITIAL_CENTER.longitude),
+          level: INITIAL_LEVEL,
+        })
+        mapRef.current = map
+        setStatus('ready')
+      })
+      .catch(() => {
+        if (!cancelled) setStatus('error')
+      })
+
+    return () => {
+      cancelled = true
+      polylineRef.current?.setMap(null)
+      polylineRef.current = null
+      destMarkerRef.current?.setMap(null)
+      destMarkerRef.current = null
+      destLabelRef.current?.setMap(null)
+      destLabelRef.current = null
+      clearBuildingMarkers(buildingMarkersRef.current)
+      buildingMarkersRef.current = []
+      for (const marker of infraMarkersRef.current) marker.setMap(null)
+      infraMarkersRef.current = []
+      el.innerHTML = ''
+      mapRef.current = null
+    }
+  }, [retryCount])
+
+  useEffect(() => {
+    if (status !== 'ready' || !mapRef.current) return
+    const maps = getKakaoMaps()
+    const dest = findDestination(searchConditions.destination)
+    const position = latLng(dest)
+
+    if (!destMarkerRef.current) {
+      destMarkerRef.current = new maps.Marker({
+        position,
+        image: destMarkerImage(maps),
+        zIndex: 2,
+        title: dest.name,
+      })
+      destMarkerRef.current.setMap(mapRef.current)
+    } else {
+      destMarkerRef.current.setPosition(position)
+    }
+
+    const label = `<div class="kakaoDestLabel">${escapeHtml(dest.name)}</div>`
+    if (!destLabelRef.current) {
+      destLabelRef.current = new maps.CustomOverlay({
+        position,
+        content: label,
+        yAnchor: 0,
+        xAnchor: 0.5,
+        zIndex: 2,
+        clickable: false,
+      })
+      destLabelRef.current.setMap(mapRef.current)
+    } else {
+      destLabelRef.current.setPosition(position)
+      destLabelRef.current.setContent(label)
+    }
+  }, [status, searchConditions.destination])
+
+  useEffect(() => {
+    if (status !== 'ready' || !mapRef.current) return
+    const maps = getKakaoMaps()
+    const map = mapRef.current
+    clearBuildingMarkers(buildingMarkersRef.current)
+    buildingMarkersRef.current = []
+
+    if (!hasSearched) return
+
+    const next: BuildingMarkerItem[] = []
+    for (const building of searchResults) {
+      const selected = building.id === selectedBuildingId
+      const marker = new maps.Marker({
+        position: latLng(building),
+        image: buildingMarkerImage(maps, selected),
+        zIndex: selected ? 8 : 4,
+        title: building.title,
+        clickable: true,
+      })
+      const info = new maps.InfoWindow({ content: tooltipHtml(building), zIndex: 10 })
+      const onClick = () => selectBuilding(building.id)
+      const onOver = () => {
+        info.open(map, marker)
+        setHoveredBuildingId(building.id)
+      }
+      const onOut = () => {
+        info.close()
+        delayClearHover()
+      }
+      maps.event.addListener(marker, 'click', onClick)
+      maps.event.addListener(marker, 'mouseover', onOver)
+      maps.event.addListener(marker, 'mouseout', onOut)
+      marker.setMap(map)
+      next.push({ marker, info, onClick, onOver, onOut })
+    }
+    buildingMarkersRef.current = next
+  }, [
+    status,
+    hasSearched,
+    searchResults,
+    selectedBuildingId,
+    selectBuilding,
+    setHoveredBuildingId,
+    delayClearHover,
+  ])
+
+  useEffect(() => {
+    if (status !== 'ready' || !mapRef.current) return
+    const maps = getKakaoMaps()
+    polylineRef.current?.setMap(null)
+    polylineRef.current = null
+    if (!selectedBuilding) return
+
+    const dest = findDestination(searchConditions.destination)
+    const points =
+      selectedBuilding.route_path.length >= 2
+        ? selectedBuilding.route_path
+        : [selectedBuilding, dest]
+    const line = new maps.Polyline({
+      path: points.map(latLng),
+      strokeWeight: 5,
+      strokeColor: '#DC143C',
+      strokeOpacity: 0.9,
+      strokeStyle: 'solid',
+      zIndex: 3,
     })
-  }, [])
+    line.setMap(mapRef.current)
+    polylineRef.current = line
+  }, [status, selectedBuilding, searchConditions.destination])
 
   useEffect(() => {
-    panTo(
-      selectedBuilding ?? destForName(searchConditions.destination),
-      selectedBuilding != null,
-    )
-  }, [mapFocusNonce, selectedBuilding, searchConditions.destination, panTo])
+    if (status !== 'ready' || !mapRef.current) return
+    const maps = getKakaoMaps()
+    const map = mapRef.current
+    for (const marker of infraMarkersRef.current) marker.setMap(null)
+    infraMarkersRef.current = []
+    if (!selectedBuildingId) return
 
-  function zoomBy(delta: number, origin?: { x: number; y: number }) {
-    const el = viewportRef.current
-    if (!el) return
-    const next = Math.min(2.4, Math.max(0.4, scale * delta))
-    const rect = el.getBoundingClientRect()
-    const ox = origin ? origin.x - rect.left : rect.width / 2
-    const oy = origin ? origin.y - rect.top : rect.height / 2
-    const wx = (ox - pan.x) / scale
-    const wy = (oy - pan.y) / scale
-    setScale(next)
-    setPan({ x: ox - wx * next, y: oy - wy * next })
+    for (const link of visibleInfrastructure) {
+      const marker = new maps.Marker({
+        position: latLng(link.match.facility),
+        image: infraMarkerImage(maps),
+        zIndex: 5,
+        title: link.match.facility.title,
+      })
+      marker.setMap(map)
+      infraMarkersRef.current.push(marker)
+    }
+  }, [status, visibleInfrastructure, selectedBuildingId])
+
+  useEffect(() => {
+    if (status !== 'ready' || !mapRef.current) return
+    const maps = getKakaoMaps()
+    const map = mapRef.current
+    const dest = findDestination(searchConditions.destination)
+
+    if (focusInfrastructureId != null) {
+      const focused = INFRASTRUCTURE.find((item) => item.id === focusInfrastructureId)
+      if (focused) {
+        map.panTo(latLng(focused))
+        return
+      }
+    }
+
+    if (selectedBuilding) {
+      const bounds = new maps.LatLngBounds()
+      bounds.extend(latLng(selectedBuilding))
+      bounds.extend(latLng(dest))
+      map.setBounds(bounds)
+      return
+    }
+
+    if (hasSearched && searchResults.length > 0) {
+      const bounds = new maps.LatLngBounds()
+      bounds.extend(latLng(dest))
+      for (const building of searchResults) bounds.extend(latLng(building))
+      map.setBounds(bounds)
+      return
+    }
+
+    map.setCenter(latLng(dest))
+    map.setLevel(INITIAL_LEVEL)
+  }, [
+    status,
+    hasSearched,
+    searchResults,
+    selectedBuilding,
+    searchConditions.destination,
+    mapFocusNonce,
+    focusInfrastructureId,
+  ])
+
+  function zoomBy(delta: number) {
+    const map = mapRef.current
+    if (!map) return
+    map.setLevel(Math.max(1, Math.min(10, map.getLevel() + delta)))
   }
 
-  const dest = destForName(searchConditions.destination)
-  const destPt = project(dest)
-  const tooltipBuilding =
-    visibleBuildings.find((b) => b.id === (hoveredBuildingId ?? selectedBuildingId)) ?? null
+  function retry() {
+    resetKakaoLoader()
+    setStatus('loading')
+    setRetryCount((n) => n + 1)
+  }
 
   return (
-    <div
-      className="mapViewport"
-      ref={viewportRef}
-      onWheel={(e) => {
-        e.preventDefault()
-        zoomBy(e.deltaY > 0 ? 0.9 : 1.1, { x: e.clientX, y: e.clientY })
-      }}
-      onPointerDown={(e) => {
-        if (e.button !== 0) return
-        drag.current = {
-          active: true,
-          moved: false,
-          sx: e.clientX,
-          sy: e.clientY,
-          px: pan.x,
-          py: pan.y,
-        }
-        ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
-      }}
-      onPointerMove={(e) => {
-        if (!drag.current.active) return
-        const dx = e.clientX - drag.current.sx
-        const dy = e.clientY - drag.current.sy
-        if (Math.hypot(dx, dy) > 4) drag.current.moved = true
-        setPan({ x: drag.current.px + dx, y: drag.current.py + dy })
-      }}
-      onPointerUp={() => {
-        if (drag.current.active && !drag.current.moved) {
-          selectBuilding(null)
-        }
-        drag.current.active = false
-      }}
-    >
-      <div
-        className="mapWorld"
-        style={{
-          width: MAP_BOUNDS.width,
-          height: MAP_BOUNDS.height,
-          transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-        }}
-      >
-        <svg
-          className="mapSvg"
-          viewBox={`0 0 ${MAP_BOUNDS.width} ${MAP_BOUNDS.height}`}
-          width={MAP_BOUNDS.width}
-          height={MAP_BOUNDS.height}
-        >
-          <rect width="100%" height="100%" fill="#e7e2d6" />
-          {BLOCKS.map((b, i) => (
-            <rect
-              key={i}
-              x={b.x}
-              y={b.y}
-              width={b.w}
-              height={b.h}
-              fill="#f4f0e6"
-              stroke="#ddd4c4"
-              strokeWidth="1"
-              rx="3"
-            />
-          ))}
-          {PARKS.map((park) => (
-            <polygon
-              key={park.name}
-              points={polylinePoints(park.points)}
-              fill="#c9d7b8"
-              stroke="#b4c7a0"
-            />
-          ))}
-          {ROADS.map((road, i) => (
-            <polyline
-              key={`road-${i}`}
-              points={polylinePoints(road)}
-              fill="none"
-              stroke="#f8f6f1"
-              strokeWidth="14"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          ))}
-          {ROADS.map((road, i) => (
-            <polyline
-              key={`road-edge-${i}`}
-              points={polylinePoints(road)}
-              fill="none"
-              stroke="#d8d0c2"
-              strokeWidth="16"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              opacity="0.35"
-            />
-          ))}
-          {SUBWAY_LINES.map((line) => (
-            <polyline
-              key={line.name}
-              points={polylinePoints(line.path)}
-              fill="none"
-              stroke={line.color}
-              strokeWidth="5"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          ))}
-          {displayedBuilding && (
-            <polyline
-              points={polylinePoints(displayedBuilding.route_path)}
-              fill="none"
-              stroke="#DC143C"
-              strokeWidth="6"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              opacity="0.85"
-            />
-          )}
-          {NEIGHBORHOODS.map((place) => {
-            const p = project(place)
-            return (
-              <text
-                key={place.name}
-                x={p.x}
-                y={p.y}
-                textAnchor="middle"
-                fill="#8a8378"
-                fontSize="18"
-                fontWeight="600"
-              >
-                {place.name}
-              </text>
-            )
-          })}
-          {STATIONS.map((stn) => {
-            const p = project(stn)
-            return (
-              <g key={stn.name}>
-                <circle cx={p.x} cy={p.y} r="6" fill="#fff" stroke="#333" strokeWidth="2" />
-                <text x={p.x + 10} y={p.y - 8} fill="#333" fontSize="13" fontWeight="700">
-                  {stn.name}
-                </text>
-              </g>
-            )
-          })}
-        </svg>
-
-        <div
-          className="destMarker"
-          style={{
-            left: destPt.x,
-            top: destPt.y,
-            transform: `translate(-50%, -100%) scale(${1 / scale})`,
-          }}
-        >
-          <span className="destPin" />
-          <span className="destLabel">{searchConditions.destination || '목적지'}</span>
+    <div className="mapViewport">
+      <div ref={containerRef} className="kakaoMap" />
+      {status === 'no-key' && (
+        <div className="mapFallback" role="alert">
+          Kakao 지도 API 키가 설정되지 않았습니다.
         </div>
-
-        {visibleBuildings.map((building: Listing) => (
-          <BuildingMarker
-            key={building.id}
-            building={building}
-            selected={selectedBuildingId === building.id}
-            hovered={hoveredBuildingId === building.id}
-            saved={isSaved(building.id)}
-            scale={scale}
-            onHover={() => setHoveredBuildingId(building.id)}
-            onLeave={delayClearHover}
-            onSelect={() => selectBuilding(building.id)}
-          />
-        ))}
-
-        {tooltipBuilding && (
-          <MarkerTooltip building={tooltipBuilding} scale={scale} />
-        )}
-      </div>
-
+      )}
+      {status === 'loading' && (
+        <div className="mapFallback" role="status">
+          지도를 불러오는 중입니다.
+        </div>
+      )}
+      {status === 'error' && (
+        <div className="mapFallback" role="alert">
+          <p>지도를 불러오지 못했습니다.</p>
+          <button type="button" className="primaryBtn sm" onClick={retry}>
+            다시 시도
+          </button>
+        </div>
+      )}
       <div
         className="mapHud"
         onPointerDown={(e) => e.stopPropagation()}
@@ -289,17 +333,21 @@ export function MapView() {
           <p className={`mapCount ${searchResults.length === 0 ? 'isEmpty' : ''}`}>
             {searchResults.length === 0
               ? '조건에 맞는 건물이 없습니다. 조건을 변경해 보세요.'
-              : `조건에 맞는 건물 ${searchResults.length}개`}
+              : searchConditions.infrastructure_priority.length > 0
+                ? `조건에 맞는 건물 ${searchResults.length}개 · 추천순`
+                : `조건에 맞는 건물 ${searchResults.length}개`}
           </p>
         )}
-        <div className="zoomBtns">
-          <button aria-label="확대" onClick={() => zoomBy(1.15)}>
-            +
-          </button>
-          <button aria-label="축소" onClick={() => zoomBy(0.87)}>
-            −
-          </button>
-        </div>
+        {status === 'ready' && (
+          <div className="zoomBtns">
+            <button type="button" aria-label="확대" onClick={() => zoomBy(-1)}>
+              +
+            </button>
+            <button type="button" aria-label="축소" onClick={() => zoomBy(1)}>
+              −
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

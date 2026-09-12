@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { BUILDINGS } from '../data/buildings'
 import { DEFAULT_SEARCH, filterListings } from '../utils/filter'
+import { getVisibleInfrastructure, rankListings } from '../utils/infrastructure'
 import {
   INITIAL_RECENT,
   MOCK_USER,
@@ -21,7 +22,14 @@ import {
   saveSavedIds,
   saveUser,
 } from '../utils/storage'
-import type { Listing, RecentSearch, SearchConditions, UserProfile } from '../types'
+import type {
+  Listing,
+  RecentSearch,
+  ScoredListing,
+  SearchConditions,
+  UserProfile,
+  VisibleInfraLink,
+} from '../types'
 
 export type Page = 'map' | 'mypage'
 export type MyPageTab = 'profile' | 'saved' | 'recent'
@@ -34,8 +42,12 @@ interface AppStateValue {
   searchConditions: SearchConditions
   hasSearched: boolean
   searchResults: Listing[]
+  scoredResults: ScoredListing[]
   hoveredBuildingId: number | null
   selectedBuildingId: number | null
+  selectedInfrastructureId: number | null
+  hoveredInfrastructureId: number | null
+  focusInfrastructureId: number | null
   savedBuildingIds: number[]
   isSavedPanelOpen: boolean
   recentSearches: RecentSearch[]
@@ -45,6 +57,7 @@ interface AppStateValue {
   selectedBuilding: Listing | null
   savedBuildings: Listing[]
   visibleBuildings: Listing[]
+  visibleInfrastructure: VisibleInfraLink[]
   navigateTo: (page: Page, tab?: MyPageTab) => void
   setMypageTab: (tab: MyPageTab) => void
   setSearchDraft: (
@@ -55,6 +68,12 @@ interface AppStateValue {
   delayClearHover: () => void
   cancelHoverClose: () => void
   selectBuilding: (id: number | null) => void
+  selectInfrastructure: (id: number | null) => void
+  focusInfrastructure: (id: number) => void
+  setHoveredInfrastructureId: (id: number | null) => void
+  delayClearInfraHover: () => void
+  clearMapSelection: () => void
+  scoreFor: (id: number) => ScoredListing | null
   toggleSaved: (id: number) => void
   isSaved: (id: number) => boolean
   setSavedPanelOpen: (open: boolean) => void
@@ -101,9 +120,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [searchConditions, setSearchConditions] =
     useState<SearchConditions>(DEFAULT_SEARCH)
   const [hasSearched, setHasSearched] = useState(false)
-  const [searchResults, setSearchResults] = useState<Listing[]>([])
+  const [scoredResults, setScoredResults] = useState<ScoredListing[]>([])
   const [hoveredBuildingId, setHoveredBuildingIdState] = useState<number | null>(null)
   const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null)
+  const [selectedInfrastructureId, setSelectedInfrastructureId] = useState<number | null>(
+    null,
+  )
+  const [hoveredInfrastructureId, setHoveredInfrastructureIdState] = useState<number | null>(
+    null,
+  )
+  const [focusInfrastructureId, setFocusInfrastructureId] = useState<number | null>(null)
   const [savedBuildingIds, setSavedBuildingIds] = useState<number[]>(() =>
     loadSavedIds([1, 2, 4]),
   )
@@ -114,6 +140,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<string | null>(null)
   const [mapFocusNonce, setMapFocusNonce] = useState(0)
   const hoverTimer = useRef<number>(0)
+  const infraHoverTimer = useRef<number>(0)
   const toastTimer = useRef<number>(0)
 
   const showToast = useCallback((message: string) => {
@@ -174,6 +201,27 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }, 220)
   }, [])
 
+  const setHoveredInfrastructureId = useCallback(
+    (id: number | null) => {
+      window.clearTimeout(infraHoverTimer.current)
+      cancelHoverClose()
+      setHoveredInfrastructureIdState(id)
+    },
+    [cancelHoverClose],
+  )
+
+  const delayClearInfraHover = useCallback(() => {
+    window.clearTimeout(infraHoverTimer.current)
+    infraHoverTimer.current = window.setTimeout(() => {
+      setHoveredInfrastructureIdState(null)
+    }, 220)
+  }, [])
+
+  const searchResults = useMemo(
+    () => scoredResults.map((item) => item.listing),
+    [scoredResults],
+  )
+
   const selectedBuilding = findBuilding(selectedBuildingId)
   const hoveredBuilding = findBuilding(hoveredBuildingId)
   const displayedBuilding = selectedBuilding ?? hoveredBuilding
@@ -195,16 +243,47 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     return [...map.values()]
   }, [hasSearched, searchResults, selectedBuilding])
 
+  const visibleInfrastructure = useMemo(
+    () =>
+      getVisibleInfrastructure({
+        hasSearched,
+        priority: searchConditions.infrastructure_priority,
+        scoredResults,
+        selectedBuildingId,
+        hoveredBuildingId,
+        selectedListing: selectedBuilding,
+        hoveredListing: hoveredBuilding,
+      }),
+    [
+      hasSearched,
+      searchConditions.infrastructure_priority,
+      scoredResults,
+      selectedBuildingId,
+      hoveredBuildingId,
+      selectedBuilding,
+      hoveredBuilding,
+    ],
+  )
+
+  const scoreFor = useCallback(
+    (id: number) => scoredResults.find((item) => item.listing.id === id) ?? null,
+    [scoredResults],
+  )
+
   const runSearch = useCallback(
     (conditions?: SearchConditions) => {
       const applied = conditions ?? searchDraft
-      const results = filterListings(BUILDINGS, applied)
+      const filtered = filterListings(BUILDINGS, applied)
+      const ranked = rankListings(filtered, applied.infrastructure_priority)
       setSearchDraft(applied)
       setSearchConditions(applied)
       setHasSearched(true)
-      setSearchResults(results)
+      setScoredResults(ranked)
       setSelectedBuildingId(null)
       setHoveredBuildingIdState(null)
+      setSelectedInfrastructureId(null)
+      setHoveredInfrastructureIdState(null)
+      setFocusInfrastructureId(null)
       setPage('map')
       window.history.pushState({}, '', '/')
       setRecentSearches((prev) => {
@@ -212,10 +291,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         return next
       })
       setMapFocusNonce((n) => n + 1)
-      if (results.length === 0) {
+      if (ranked.length === 0) {
         showToast('조건에 맞는 건물이 없습니다. 조건을 변경해 보세요.')
+      } else if (applied.infrastructure_priority.length > 0) {
+        showToast(`조건에 맞는 건물 ${ranked.length}개를 추천순으로 표시합니다.`)
       } else {
-        showToast(`조건에 맞는 건물 ${results.length}개를 표시합니다.`)
+        showToast(`조건에 맞는 건물 ${ranked.length}개를 표시합니다.`)
       }
     },
     [searchDraft, showToast],
@@ -224,10 +305,33 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const selectBuilding = useCallback((id: number | null) => {
     cancelHoverClose()
     setSelectedBuildingId(id)
+    setSelectedInfrastructureId(null)
+    setFocusInfrastructureId(null)
     if (id != null) {
       setHoveredBuildingIdState(id)
       setMapFocusNonce((n) => n + 1)
     }
+  }, [cancelHoverClose])
+
+  const selectInfrastructure = useCallback((id: number | null) => {
+    setSelectedInfrastructureId(id)
+    if (id != null) setHoveredInfrastructureIdState(id)
+  }, [])
+
+  const focusInfrastructure = useCallback((id: number) => {
+    setSelectedInfrastructureId(id)
+    setHoveredInfrastructureIdState(id)
+    setFocusInfrastructureId(id)
+    setMapFocusNonce((n) => n + 1)
+  }, [])
+
+  const clearMapSelection = useCallback(() => {
+    cancelHoverClose()
+    setSelectedBuildingId(null)
+    setHoveredBuildingIdState(null)
+    setSelectedInfrastructureId(null)
+    setHoveredInfrastructureIdState(null)
+    setFocusInfrastructureId(null)
   }, [cancelHoverClose])
 
   const toggleSaved = useCallback(
@@ -282,6 +386,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       window.history.pushState({}, '', '/')
       setSelectedBuildingId(id)
       setHoveredBuildingIdState(id)
+      setSelectedInfrastructureId(null)
+      setFocusInfrastructureId(null)
       setMapFocusNonce((n) => n + 1)
     },
     [],
@@ -295,6 +401,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         max_monthly_rent: search.max_monthly_rent,
         transport_modes: [...search.transport_modes],
         room_types: [...search.room_types],
+        infrastructure_priority: [...(search.infrastructure_priority ?? [])],
       })
     },
     [runSearch],
@@ -319,8 +426,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       searchConditions,
       hasSearched,
       searchResults,
+      scoredResults,
       hoveredBuildingId,
       selectedBuildingId,
+      selectedInfrastructureId,
+      hoveredInfrastructureId,
+      focusInfrastructureId,
       savedBuildingIds,
       isSavedPanelOpen,
       recentSearches,
@@ -330,6 +441,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       selectedBuilding,
       savedBuildings,
       visibleBuildings,
+      visibleInfrastructure,
       navigateTo,
       setMypageTab,
       setSearchDraft,
@@ -338,6 +450,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       delayClearHover,
       cancelHoverClose,
       selectBuilding,
+      selectInfrastructure,
+      focusInfrastructure,
+      setHoveredInfrastructureId,
+      delayClearInfraHover,
+      clearMapSelection,
+      scoreFor,
       toggleSaved,
       isSaved,
       setSavedPanelOpen,
@@ -358,8 +476,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       searchConditions,
       hasSearched,
       searchResults,
+      scoredResults,
       hoveredBuildingId,
       selectedBuildingId,
+      selectedInfrastructureId,
+      hoveredInfrastructureId,
+      focusInfrastructureId,
       savedBuildingIds,
       isSavedPanelOpen,
       recentSearches,
@@ -369,6 +491,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       selectedBuilding,
       savedBuildings,
       visibleBuildings,
+      visibleInfrastructure,
       navigateTo,
       setMypageTab,
       runSearch,
@@ -376,6 +499,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       delayClearHover,
       cancelHoverClose,
       selectBuilding,
+      selectInfrastructure,
+      focusInfrastructure,
+      setHoveredInfrastructureId,
+      delayClearInfraHover,
+      clearMapSelection,
+      scoreFor,
       toggleSaved,
       isSaved,
       login,

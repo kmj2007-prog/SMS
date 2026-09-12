@@ -5,9 +5,11 @@ import { formatMinutes, formatMonthlyRent } from '../utils/format'
 export function MarkerTooltip({
   building,
   scale,
+  badges,
 }: {
   building: Listing
   scale: number
+  badges?: string[]
 }) {
   const { x, y } = project(building)
   return (
@@ -28,6 +30,11 @@ export function MarkerTooltip({
       <span>
         {building.destination.replace('학교', '')}까지 {formatMinutes(building.commute_min)}
       </span>
+      {badges?.slice(0, 2).map((badge) => (
+        <span key={badge} className="tooltipBadge">
+          {badge}
+        </span>
+      ))}
     </div>
   )
 }

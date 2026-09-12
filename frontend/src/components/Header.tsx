@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import logo from '../assets/logo.png'
 import { useAppState } from '../context/AppStateContext'
 
 export function Header() {
@@ -22,16 +23,7 @@ export function Header() {
         onClick={() => navigateTo('map')}
         aria-label="살면살아 홈"
       >
-        <span className="logoMark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" width="22" height="22">
-            <path
-              fill="currentColor"
-              d="M16 3c5.1 0 9.2 4.1 9.2 9.6 0 6.8-9.2 16.4-9.2 16.4S6.8 19.4 6.8 12.6C6.8 7.1 10.9 3 16 3z"
-            />
-            <path fill="#fff" d="M11.6 13.2 16 9.4l4.4 3.8v6.2h-3.1v-3.4h-2.6v3.4h-3.1z" />
-          </svg>
-        </span>
-        <span className="logoText">살면살아</span>
+        <img className="logoImg" src={logo} alt="살면살아" />
       </button>
 
       <div className="headerRight">

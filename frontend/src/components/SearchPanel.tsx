@@ -1,10 +1,15 @@
+import type { CSSProperties } from 'react'
 import type { TransportMode } from '../types'
 import { DESTINATION_OPTIONS } from '../data/mapPlaces'
 import { useAppState } from '../context/AppStateContext'
 import { formatManwon } from '../utils/format'
+import { InfrastructurePriorityControl } from './InfrastructurePriorityControl'
+import { InfrastructureSelector } from './InfrastructureSelector'
 
 const COMMUTE_OPTIONS = [10, 20, 30, 40, 50, 60]
-const RENT_OPTIONS = [40, 45, 50, 55, 60, 70, 80]
+const RENT_MIN = 40
+const RENT_MAX = 100
+const RENT_STEP = 5
 const TRANSPORTS: { id: TransportMode; label: string }[] = [
   { id: 'subway', label: '지하철' },
   { id: 'bus', label: '버스' },
@@ -18,6 +23,7 @@ export function SearchPanel() {
     runSearch,
     hasSearched,
     searchResults,
+    searchConditions,
   } = useAppState()
 
   const canSearch =
@@ -105,22 +111,37 @@ export function SearchPanel() {
       </fieldset>
 
       <label className="field">
-        <span>월세 상한</span>
-        <select
+        <span className="sliderHead">
+          <span>월세 상한</span>
+          <strong>{formatManwon(searchDraft.max_monthly_rent)} 이하</strong>
+        </span>
+        <input
+          className="rentSlider"
+          type="range"
+          min={RENT_MIN}
+          max={RENT_MAX}
+          step={RENT_STEP}
           value={searchDraft.max_monthly_rent}
+          aria-valuemin={RENT_MIN}
+          aria-valuemax={RENT_MAX}
+          aria-valuenow={searchDraft.max_monthly_rent}
+          aria-valuetext={`${formatManwon(searchDraft.max_monthly_rent)} 이하`}
+          style={
+            {
+              '--fill': `${((searchDraft.max_monthly_rent - RENT_MIN) / (RENT_MAX - RENT_MIN)) * 100}%`,
+            } as CSSProperties
+          }
           onChange={(e) =>
             setSearchDraft((prev) => ({
               ...prev,
               max_monthly_rent: Number(e.target.value),
             }))
           }
-        >
-          {RENT_OPTIONS.map((rent) => (
-            <option key={rent} value={rent}>
-              {formatManwon(rent)} 이하
-            </option>
-          ))}
-        </select>
+        />
+        <span className="sliderEnds">
+          <span>{formatManwon(RENT_MIN)}</span>
+          <span>{formatManwon(RENT_MAX)}</span>
+        </span>
       </label>
 
       <fieldset className="field">
@@ -140,11 +161,26 @@ export function SearchPanel() {
         </div>
       </fieldset>
 
+      <InfrastructureSelector
+        value={searchDraft.infrastructure_priority}
+        onChange={(infrastructure_priority) =>
+          setSearchDraft((prev) => ({ ...prev, infrastructure_priority }))
+        }
+      />
+      <InfrastructurePriorityControl
+        value={searchDraft.infrastructure_priority}
+        onChange={(infrastructure_priority) =>
+          setSearchDraft((prev) => ({ ...prev, infrastructure_priority }))
+        }
+      />
+
       {hasSearched && (
         <p className={`resultHint ${searchResults.length === 0 ? 'isEmpty' : ''}`}>
           {searchResults.length === 0
             ? '조건에 맞는 건물이 없습니다. 조건을 변경해 보세요.'
-            : `조건에 맞는 건물 ${searchResults.length}개`}
+            : searchConditions.infrastructure_priority.length > 0
+              ? `조건에 맞는 건물 ${searchResults.length}개 · 추천순`
+              : `조건에 맞는 건물 ${searchResults.length}개`}
         </p>
       )}
 

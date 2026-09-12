@@ -1,4 +1,4 @@
-import type { RecentSearch, SearchConditions, UserProfile } from '../types'
+import type { InfrastructureKind, RecentSearch, SearchConditions, UserProfile } from '../types'
 
 export const STORAGE_KEYS = {
   saved: 'salmyeon-sala:saved-ids',
@@ -10,6 +10,8 @@ export const MOCK_USER: UserProfile = {
   name: '김하은',
   email: 'haeun@example.com',
 }
+
+const INFRA_KINDS: InfrastructureKind[] = ['gym', 'park', 'cinema', 'library']
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -30,9 +32,30 @@ export function saveSavedIds(ids: number[]): void {
   localStorage.setItem(STORAGE_KEYS.saved, JSON.stringify(ids))
 }
 
+function uniquePriority(value: unknown): InfrastructureKind[] {
+  if (!Array.isArray(value)) return []
+  const seen = new Set<InfrastructureKind>()
+  const next: InfrastructureKind[] = []
+  for (const item of value) {
+    if (!INFRA_KINDS.includes(item as InfrastructureKind)) continue
+    const kind = item as InfrastructureKind
+    if (seen.has(kind)) continue
+    seen.add(kind)
+    next.push(kind)
+  }
+  return next
+}
+
+function normalizeRecent(item: RecentSearch): RecentSearch {
+  return {
+    ...item,
+    infrastructure_priority: uniquePriority(item.infrastructure_priority),
+  }
+}
+
 export function loadRecentSearches(fallback: RecentSearch[]): RecentSearch[] {
   const items = readJson<RecentSearch[]>(STORAGE_KEYS.recent, fallback)
-  return Array.isArray(items) ? items : fallback
+  return Array.isArray(items) ? items.map(normalizeRecent) : fallback
 }
 
 export function saveRecentSearches(items: RecentSearch[]): void {
@@ -59,6 +82,7 @@ export function conditionsToRecent(conditions: SearchConditions): RecentSearch {
     max_monthly_rent: conditions.max_monthly_rent,
     transport_modes: [...conditions.transport_modes],
     room_types: [...conditions.room_types],
+    infrastructure_priority: [...conditions.infrastructure_priority],
     searched_at: new Date().toISOString(),
   }
 }
@@ -71,6 +95,7 @@ export const INITIAL_RECENT: RecentSearch[] = [
     max_monthly_rent: 60,
     transport_modes: ['subway', 'bus'],
     room_types: ['원룸'],
+    infrastructure_priority: ['gym', 'cinema', 'library'],
     searched_at: '2026-09-10T18:12:00',
   },
   {
@@ -80,6 +105,7 @@ export const INITIAL_RECENT: RecentSearch[] = [
     max_monthly_rent: 50,
     transport_modes: ['subway'],
     room_types: ['원룸'],
+    infrastructure_priority: ['park', 'gym'],
     searched_at: '2026-09-08T11:05:00',
   },
 ]
