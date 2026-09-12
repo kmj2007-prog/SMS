@@ -9,7 +9,7 @@ export class ApiError extends Error {
 }
 
 export const API_BASE_URL = String(
-  import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000',
+  import.meta.env.VITE_API_BASE_URL ?? 'https://sms-backend-8v7d.onrender.com',
 ).replace(/\/$/, '')
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
