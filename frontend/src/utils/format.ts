@@ -1,4 +1,5 @@
-import type { RoomType, TransportMode } from '../types'
+import type { InfrastructureKind, RoomType, TransportMode } from '../types'
+import { INFRA_LABELS } from '../data/infrastructure'
 
 export function formatManwon(value: number | null | undefined): string {
   if (value == null) return '-'
@@ -52,4 +53,8 @@ export function formatBuildingAge(builtYear: number, now = 2026): string {
   const age = now - builtYear
   if (age <= 0) return `${builtYear}년 준공`
   return `${builtYear}년 준공 · ${age}년차`
+}
+
+export function formatInfraKind(kind: InfrastructureKind): string {
+  return INFRA_LABELS[kind]
 }
